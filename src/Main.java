@@ -4,7 +4,19 @@
 public class Main {
     public static void main(String[] args) throws Exception {
         
-        DisplayWindow window = DisplayWindow.getInstance();
+        StentParam params = new StentParam();
+        params.setOuterDiameter(3);
+        params.setWallThickness(0.5);
+        params.setLength(15);
+        params.setMeshAngle(40);
+        params.setMeshWidth(0.6);
+        params.setRingHeight(2);
+        params.setMeshPillarCount(4);
+        params.setName("artTest1");
+        Slicer slicer = Slicer.getInstance();
+        slicer.generateStent(params);
+        
+        //DisplayWindow window = DisplayWindow.getInstance();
         // Window window = new Window();
 
         // double num = 0;
