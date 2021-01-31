@@ -6,6 +6,7 @@ import java.io.OutputStreamWriter;
 import java.util.Collections;
 import java.util.Vector;
 
+
 public class Slicer {
 
     private static Slicer slicer;
@@ -30,7 +31,9 @@ public class Slicer {
 
     //return -- if stent can successfully be generated
     public boolean generateStent(StentParam params) {
+
         this.params = params;
+
         if (params.isValid()) {
             try {
                 outputGCodeFile = new File(fileDirectory + params.getFilename() + ".gcode");
@@ -41,16 +44,18 @@ public class Slicer {
 
                 fos = new FileOutputStream(outputGCodeFile);
                 writer = new BufferedWriter(new OutputStreamWriter(fos));
+
                 resetVals();
+
+                //writing g-code file output
                 initialize();
                 skirt();
                 lowerRingLayer();
                 meshLayer();
                 upperRingLayer();
                 printTermination();
-                writer.close();
-                
 
+                writer.close();
                 return true;
             } catch (IOException e) {
                 System.out.println("File output failed");
@@ -68,6 +73,7 @@ public class Slicer {
         rPos = 0;
     }
 
+    //Outputs the initializing commands (heating, homing, etc.)
     private void initialize() throws IOException {
         writer.write(";Flavor: Pseudo-Marlin");
         writer.newLine();
@@ -159,6 +165,7 @@ public class Slicer {
         zPos = Constants.LAYER_HEIGHT;
     }
 
+    //Primes the nozzle by printing a skirt
     private void skirt() throws IOException {
         rPos = (params.getOuterDiameter() / 2) + 5;
         fRate = 1500;
@@ -173,8 +180,9 @@ public class Slicer {
         absZPos(1);
     }
 
+    //prints the lower ring layer for the stent
     private void lowerRingLayer() throws IOException {
-        for (int i = 0; i < params.getRingHeight(); i += Constants.LAYER_HEIGHT) {
+        for (double i = 0; i < params.getRingHeight(); i += Constants.LAYER_HEIGHT) {
             //moving to correct location for outer loop
             absThetaPos(0, false);
             absRPos((params.getOuterDiameter() - Constants.NOZZLE_DIAM)/2, false);
@@ -188,31 +196,31 @@ public class Slicer {
         }
     }
 
-    private void meshLayer() {
-        int meshPillarCount = 6;
-        double pillarWidth = 0.5;
-        double outerDiameter = 3;
-        Pair[] leftBridges = new Pair[meshPillarCount];
-        Pair[] rightBridges = new Pair[meshPillarCount];
-        double zPos = 1;
-        double length = 15;
-        double ringHeight = 1;
-        double angFromVert = 30;
+    /*
+    NOTE: meshLayer only prints a single outer wall for each column as is - no interior wraps
+    */
+    //print the main mesh layer for the stent
+    private void meshLayer() throws IOException {
+        Pair[] leftBridges = new Pair[params.getMeshPillarCount()];
+        Pair[] rightBridges = new Pair[params.getMeshPillarCount()];
 
-        for (int i = 0; i<meshPillarCount; i++) {
+        for (int i = 0; i < params.getMeshPillarCount(); i++) {
             leftBridges[i] = new Pair();
             rightBridges[i] = new Pair();
-            leftBridges[i].first = i * 360 / meshPillarCount;
-            leftBridges[i].second = leftBridges[i].first + (360 * pillarWidth / (Math.PI * outerDiameter));
+            leftBridges[i].first = i * 360 / params.getMeshPillarCount();
+            leftBridges[i].second = leftBridges[i].first + (360 * params.getMeshWidth() / (Math.PI * params.getOuterDiameter()));
             rightBridges[i].first = leftBridges[i].first;
             rightBridges[i].second = leftBridges[i].second;
         }
 
-        for (double i = zPos; i < length - ringHeight; i += Constants.LAYER_HEIGHT) {
+        for (double i = zPos + Constants.LAYER_HEIGHT; i <= params.getLength() - params.getRingHeight(); i += Constants.LAYER_HEIGHT) {
             Vector<Pair> trueIntervals = new Vector<Pair>();
             for (int j = 0; j < leftBridges.length; j++) {
                 trueIntervals.add(new Pair(((leftBridges[j].second < leftBridges[j].first) ? leftBridges[j].first - 360 : leftBridges[j].first), leftBridges[j].second));
             }
+
+            //adding rightBridgeIntervals to trueIntervals
+            //minor angular issue here - not accounting for nozzle diam when determining if 2 intervals overlap
             for (int j = 0; j < rightBridges.length; j++) {
                 boolean inserted = false;
                 for (int k = 0; k < trueIntervals.size(); k++) {
@@ -231,20 +239,68 @@ public class Slicer {
 
             System.out.println("bridges for layer height " + i + ": \n" + "leftBridges: " + printBridge(leftBridges) + "\nrightBridges: " + printBridge(rightBridges) + "\nCondensed Intervals: " + printBridge(trueIntervals) + "\n\n");
             
+            //add gcode for layer
+            absZPos(i);
+            for (int j = 0; j < trueIntervals.size(); j++) {
+                absThetaPos(trueIntervals.get(j).first + (180 * Constants.NOZZLE_DIAM / (Math.PI * (params.getOuterDiameter() - Constants.NOZZLE_DIAM))), false);
+                absRPos((params.getOuterDiameter() - Constants.NOZZLE_DIAM) / 2, false);
+                absRPos((params.getOuterDiameter()/2) - params.getWallThickness() + (Constants.NOZZLE_DIAM / 2), true);
+                absThetaPos(trueIntervals.get(j).second - (180 * Constants.NOZZLE_DIAM / (Math.PI * (params.getOuterDiameter() - Constants.NOZZLE_DIAM))), true);
+                absRPos((params.getOuterDiameter() - Constants.NOZZLE_DIAM) / 2, true);
+                absThetaPos(trueIntervals.get(j).first + (180 * Constants.NOZZLE_DIAM / (Math.PI * (params.getOuterDiameter() - Constants.NOZZLE_DIAM))), true);
+            }
             
             //iterate bridges for next round
-            leftBridges = iterateBridges(leftBridges, true, angFromVert, outerDiameter, Constants.LAYER_HEIGHT);
-            rightBridges = iterateBridges(rightBridges, false, angFromVert, outerDiameter, Constants.LAYER_HEIGHT);
+            leftBridges = iterateBridges(leftBridges, true, params.getMeshAngle(), params.getOuterDiameter(), Constants.LAYER_HEIGHT);
+            rightBridges = iterateBridges(rightBridges, false, params.getMeshAngle(), params.getOuterDiameter(), Constants.LAYER_HEIGHT);
         }
     }
 
-    private void upperRingLayer() {
 
+    //prints the upper ring layer for the stent
+    private void upperRingLayer() throws IOException {
+        for (double i = zPos + Constants.LAYER_HEIGHT; i <= params.getLength() + Constants.LAYER_HEIGHT; i += Constants.LAYER_HEIGHT) {
+            //moving to correct location for outer loop
+            absZPos(i);
+            absThetaPos(0, false);
+            absRPos((params.getOuterDiameter() - Constants.NOZZLE_DIAM)/2, false);
+            
+            absThetaPos(360, true);
+
+            for (double j = (params.getOuterDiameter()/2) - params.getWallThickness() ; j < (params.getOuterDiameter()/2) - Constants.NOZZLE_DIAM ; j += 0.95 * Constants.NOZZLE_DIAM) {
+                absRPos(j + (Constants.NOZZLE_DIAM/2), true);
+                absThetaPos((((j-(params.getOuterDiameter()/2)+params.getWallThickness())/(0.95 * Constants.NOZZLE_DIAM)) % 2 == 0) ? 0 : 360, true);
+            }
+        }
     }
 
-    private void printTermination() {
 
+    //runs the necessary print termination procedures (lower print, cool hotend, turn off fans, etc.)
+    private void printTermination() throws IOException {
+        absZPos(zPos + 20);
+        absRPos(0, false);
+        absThetaPos(0, false);
+        writer.write("M140 S0");
+        writer.newLine();
+        writer.write("M107");
+        writer.newLine();
+        writer.write("M104 S0");
+        writer.newLine();
+        writer.write("M140 S0");
+        writer.newLine();
+        writer.write("M84");
+        writer.newLine();
+        writer.write("M104 S0");
+        writer.newLine();
+        writer.write("M117 Enjoy your stent");
+        writer.newLine();
+        writer.write(";End of g-code");
+        writer.newLine();
     }
+
+
+
+    //Support methods:
 
     private double rMovementExtrusion(double rShift) {
         return (4 * Constants.LAYER_HEIGHT * Constants.NOZZLE_DIAM * Math.abs(rShift)) / (Math.pow(Constants.FILAMENT_DIAMETER, 2));
@@ -327,6 +383,7 @@ public class Slicer {
     }
 }
 
+//custom Pair class
 class Pair implements Comparable<Pair>{
     public double first, second;
     
