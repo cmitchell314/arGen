@@ -12,4 +12,5 @@ public class Constants {
     public static final int NOZZLE_TEMP = 230;
     public static final double LAYER_HEIGHT = 0.1;
     public static final int MAX_ACCEL = 1000;
+    public static final double FILAMENT_DIAMETER = 1.75;
 }

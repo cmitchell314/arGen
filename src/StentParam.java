@@ -2,7 +2,7 @@
 
 public class StentParam {
 
-    private double outerDiameter, wallThickness, length, meshAngle, meshWidth;
+    private double outerDiameter, wallThickness, length, meshAngle, meshWidth, ringHeight;
     private int meshPillarCount;
     private String filename;
 
@@ -34,9 +34,13 @@ public class StentParam {
         this.filename = filename;
     }
 
-    public boolean meshPillarCount(int meshPillarCount) {
+    public boolean setMeshPillarCount(int meshPillarCount) {
         this.meshPillarCount = meshPillarCount;
         return true;
+    }
+
+    public void setRingHeight(double ringHeight) {
+        this.ringHeight = ringHeight;
     }
 
     public double getOuterDiameter() {
@@ -95,8 +99,16 @@ public class StentParam {
         }
     }
 
+    public double getRingHeight() {
+        if (ringHeight == 0) {
+            return -1;
+        } else {
+            return ringHeight;
+        }
+    }
+
     public boolean isValid() {
-        if (getOuterDiameter() == -1 || getWallThickness() == -1 || getLength() == -1 || getMeshAngle() == -1 || getMeshWidth() == -1 || getMeshPillarCount() == -1) {
+        if (getOuterDiameter() == -1 || getWallThickness() == -1 || getLength() == -1 || getMeshAngle() == -1 || getMeshWidth() == -1 || getMeshPillarCount() == -1 || getRingHeight() == -1) {
             return false;
         } else return true;
     }
