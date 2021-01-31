@@ -3,6 +3,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.Collections;
+import java.util.Vector;
 
 public class Slicer {
 
@@ -187,7 +189,53 @@ public class Slicer {
     }
 
     private void meshLayer() {
+        int meshPillarCount = 6;
+        double pillarWidth = 0.5;
+        double outerDiameter = 3;
+        Pair[] leftBridges = new Pair[meshPillarCount];
+        Pair[] rightBridges = new Pair[meshPillarCount];
+        double zPos = 1;
+        double length = 15;
+        double ringHeight = 1;
+        double angFromVert = 30;
 
+        for (int i = 0; i<meshPillarCount; i++) {
+            leftBridges[i] = new Pair();
+            rightBridges[i] = new Pair();
+            leftBridges[i].first = i * 360 / meshPillarCount;
+            leftBridges[i].second = leftBridges[i].first + (360 * pillarWidth / (Math.PI * outerDiameter));
+            rightBridges[i].first = leftBridges[i].first;
+            rightBridges[i].second = leftBridges[i].second;
+        }
+
+        for (double i = zPos; i < length - ringHeight; i += Constants.LAYER_HEIGHT) {
+            Vector<Pair> trueIntervals = new Vector<Pair>();
+            for (int j = 0; j < leftBridges.length; j++) {
+                trueIntervals.add(new Pair(((leftBridges[j].second < leftBridges[j].first) ? leftBridges[j].first - 360 : leftBridges[j].first), leftBridges[j].second));
+            }
+            for (int j = 0; j < rightBridges.length; j++) {
+                boolean inserted = false;
+                for (int k = 0; k < trueIntervals.size(); k++) {
+                    if ((rightBridges[j].first >= trueIntervals.get(k).first && rightBridges[j].first <= trueIntervals.get(k).second) || (rightBridges[j].second >= trueIntervals.get(k).first && rightBridges[j].second <= trueIntervals.get(k).second)) {
+                        trueIntervals.set(k, new Pair(Math.min(rightBridges[j].first, trueIntervals.get(k).first), Math.max(rightBridges[j].second, trueIntervals.get(k).second)));
+                        inserted = true;
+                        break;
+                    }
+                }
+                if (!inserted) {
+                    trueIntervals.add(rightBridges[j]);
+                }
+            }
+
+            Collections.sort(trueIntervals);
+
+            System.out.println("bridges for layer height " + i + ": \n" + "leftBridges: " + printBridge(leftBridges) + "\nrightBridges: " + printBridge(rightBridges) + "\nCondensed Intervals: " + printBridge(trueIntervals) + "\n\n");
+            
+            
+            //iterate bridges for next round
+            leftBridges = iterateBridges(leftBridges, true, angFromVert, outerDiameter, Constants.LAYER_HEIGHT);
+            rightBridges = iterateBridges(rightBridges, false, angFromVert, outerDiameter, Constants.LAYER_HEIGHT);
+        }
     }
 
     private void upperRingLayer() {
@@ -251,4 +299,47 @@ public class Slicer {
         writer.newLine();
         zPos = z;
     }
+
+    private static Pair[] iterateBridges(Pair[] bridges, boolean isLeft, double angFromVert, double outerDiameter, double layerHeight) {
+        for (int i = 0; i < bridges.length; i++) {
+            bridges[i].first += ((isLeft) ? -1 : 1) * 360 * layerHeight * Math.tan(angFromVert) / (Math.PI * outerDiameter) + 360;
+            bridges[i].second += ((isLeft) ? -1 : 1) * 360 * layerHeight * Math.tan(angFromVert) / (Math.PI * outerDiameter) + 360;
+            bridges[i].first %= 360;
+            bridges[i].second %= 360;
+        }
+        return bridges;
+    }
+
+    private static String printBridge(Pair[] bridges) {
+        String bridgePrintout = new String();
+        for (int i = 0; i < bridges.length ; i++) {
+            bridgePrintout += "[" + ((int)(100 * bridges[i].first))/100 + ", " + ((int)(100 * bridges[i].second))/100 + "] ";
+        }
+        return bridgePrintout;
+    }
+
+    private static String printBridge(Vector<Pair> bridges) {
+        String bridgePrintout = new String();
+        for (int i = 0; i < bridges.size() ; i++) {
+            bridgePrintout += "[" + ((int)(100 * bridges.get(i).first))/100 + ", " + ((int)(100 * bridges.get(i).second))/100 + "] ";
+        }
+        return bridgePrintout;
+    }
+}
+
+class Pair implements Comparable<Pair>{
+    public double first, second;
+    
+    public Pair() {
+
+    }
+    public Pair(double first, double second) {
+        this.first = first;
+        this.second = second;
+    }
+
+	@Override
+	public int compareTo(Pair b) {
+		return (int)(this.first - b.first);
+	}
 }

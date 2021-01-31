@@ -1,10 +1,9 @@
-import javax.swing.JFrame;
-import javax.swing.JPanel;
+
 
 
 public class Main {
     public static void main(String[] args) throws Exception {
-
+        
         DisplayWindow window = DisplayWindow.getInstance();
         // Window window = new Window();
 
@@ -23,4 +22,8 @@ public class Main {
         // window.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         // window.setVisible(true);
     }
+
+    
 }
+
+
